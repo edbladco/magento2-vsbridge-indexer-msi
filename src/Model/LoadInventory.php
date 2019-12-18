@@ -43,10 +43,12 @@ class LoadInventory implements LoadInventoryInterface
         $rawInventoryByProductId = [];
 
         foreach ($rawInventory as $sku => $productInventory) {
-            $productId = $productIdBySku[$sku];
-            $productInventory['product_id'] = $productId;
-            unset($productInventory['sku']);
-            $rawInventoryByProductId[$productId] = $productInventory;
+            if ( !empty($productIdBySku[$sku]) ) {
+                $productId = $productIdBySku[$sku];
+                $productInventory['product_id'] = $productId;
+                unset($productInventory['sku']);
+                $rawInventoryByProductId[$productId] = $productInventory;
+            }
         }
 
         return $rawInventoryByProductId;

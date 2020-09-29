@@ -82,19 +82,72 @@ class Inventory
     {
         $connection = $this->resource->getConnection();
         $stockItemTableName = $this->getSockIndexTableByStore->execute($storeId);
+        $stockId = 2;
+
+/*        $expressionsToSelect = [
+            new \Zend_Db_Expr(
+                sprintf('%s.quantity + SUM(COALESCE(reservation_table.quantity, 0)) AS qty', $stockItemTableName)
+            ),
+            new \Zend_Db_Expr(
+                sprintf('CASE WHEN %s.quantity + SUM(COALESCE(reservation_table.quantity, 0)) > 0 || SUM(reservation_table.quantity) IS NULL THEN %s.is_salable ELSE 0 END AS is_in_stock', $stockItemTableName, $stockItemTableName)
+            ),
+            new \Zend_Db_Expr(
+                sprintf('CASE WHEN %s.quantity + SUM(COALESCE(reservation_table.quantity, 0)) > 0 || SUM(reservation_table.quantity) IS NULL THEN %s.is_salable ELSE 0 END AS stock_status', $stockItemTableName, $stockItemTableName)
+            )
+        ];
+*/
+        $expressionsToSelect = [
+            new \Zend_Db_Expr(
+                sprintf('%s.quantity + SUM(COALESCE(reservation_table.quantity, 0)) AS qty', $stockItemTableName)
+            ),
+            new \Zend_Db_Expr(
+                sprintf('
+CASE WHEN %s.quantity + SUM(COALESCE(reservation_table.quantity, 0)) > 0 THEN
+		%s.is_salable
+	WHEN SUM(reservation_table.quantity) IS NULL AND %s.quantity > 0 THEN 
+		%s.is_salable
+	ELSE
+		0
+	END AS is_in_stock', $stockItemTableName, $stockItemTableName, $stockItemTableName, $stockItemTableName)
+            ),
+            new \Zend_Db_Expr(
+                sprintf('
+CASE WHEN %s.quantity + SUM(COALESCE(reservation_table.quantity, 0)) > 0 THEN
+		%s.is_salable
+	WHEN SUM(reservation_table.quantity) IS NULL AND %s.quantity > 0 THEN 
+		%s.is_salable
+	ELSE
+		0
+	END AS stock_status', $stockItemTableName, $stockItemTableName, $stockItemTableName, $stockItemTableName)
+            ),
+        ];
 
         $select = $connection->select()
             ->from(
                 $stockItemTableName,
                 [
                     'sku' => IndexStructure::SKU,
-                    'qty' => IndexStructure::QUANTITY,
-                    'is_in_stock' => IndexStructure::IS_SALABLE,
-                    'stock_status' => IndexStructure::IS_SALABLE,
+                    // 'qty' => IndexStructure::QUANTITY,
+                    // 'is_in_stock' => IndexStructure::IS_SALABLE,
+//                    'stock_status' => IndexStructure::IS_SALABLE,
                 ]
-            )
-            ->where(IndexStructure::SKU . ' IN (?)', $productIds);
+            );
+//            ->where(IndexStructure::SKU . ' IN (?)', $productIds);
 
+        $select->joinLeft(
+            ['reservation_table' => $this->resource->getTableName('inventory_reservation')],
+            sprintf('reservation_table.sku=%s.sku AND %d = reservation_table.stock_id', $stockItemTableName, $stockId),
+            $expressionsToSelect
+        );
+        $select->group(
+            [
+$stockItemTableName . "." . IndexStructure::SKU
+            ]
+        );
+
+$select->where($stockItemTableName . "." . IndexStructure::SKU . ' IN (?)', $productIds);
+//file_put_contents("/tmp/70.log", $select, FILE_APPEND);
+//die;
         return $connection->fetchAssoc($select);
     }
 }
